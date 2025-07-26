@@ -1,0 +1,67 @@
+* proxyonthego
+
+A simple forward proxy written in Go, created as a learning project.
+
+** Building the Project
+
+This project uses a =Makefile= to simplify common tasks. To build both the proxy and the test server, run:
+
+#+begin_src shell
+make build
+#+end_src
+
+This will compile the executables and place them in the =bin/= directory.
+
+** Running the Proxy
+
+You can run the proxy with default settings (port 8080):
+
+#+begin_src shell
+./bin/proxy
+#+end_src
+
+To specify a different port or run in quiet mode (no informational logging), use the command-line flags:
+
+#+begin_src shell
+./bin/proxy -port=9999 --quiet
+#+end_src
+
+** Performance Testing
+
+A performance test suite is included to benchmark the proxy's latency and throughput.
+
+To run the full test suite:
+
+#+begin_src shell
+make test
+#+end_src
+
+This command will:
+1. Build the necessary binaries.
+2. Start the proxy and a local test server.
+3. Run benchmarks using the =hey= load testing tool.
+4. Save the results inside the =perf_test/= directory.
+
+** Cleaning Up
+
+To remove all build artifacts and test results, run:
+
+#+begin_src shell
+make clean
+#+end_src
+
+** Project Structure
+
+#+begin_src text
+/proxyonthego
+├── bin/                  # Compiled application binaries
+├── cmd/                  # Source code for executables
+│   ├── proxy/
+│   │   └── main.go       # The main proxy application
+│   └── test_server/
+│       └── main.go       # A simple HTTP server for testing
+├── go.mod                # Go module definition
+├── Makefile              # Build and test automation
+├── perf_test.sh          # The performance test script
+└── perf_test/            # Output directory for test results
+#+end_src
