@@ -1,0 +1,19 @@
+# Configuration for the reverse proxy.
+
+port: 8081
+
+# A list of services to proxy to.
+services:
+  # The path prefix that will be routed to this service.
+  - path: /
+    # A list of instance addresses for this service (for load balancing).
+    instances:
+      - http://localhost:9090
+      - http://localhost:9091
+  - path: /service1
+    instances:
+      - http://localhost:9092
+      - http://localhost:9093
+  - path: /service2
+    instances:
+      - http://localhost:9094

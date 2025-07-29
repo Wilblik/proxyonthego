@@ -1,20 +1,28 @@
 * proxyonthego
 
-A simple forward proxy written in Go, created as a learning project.
+A project exploring proxy servers in Go, containing a forward proxy and a reverse proxy/API gateway with load balancing.
 
 ** Building the Project
 
-This project uses a =Makefile= to simplify common tasks. To build both the proxy and the test server, run:
+This project uses a =Makefile=. To build both proxies and the test server, run:
 
 #+begin_src shell
 make build
 #+end_src
 
-This will compile the executables and place them in the =bin/= directory.
+To build a single application
+
+#+begin_src shell
+make proxy
+make reverse_proxy
+make test_server
+#+end_src
+
+All compiled executables will be placed in the =bin/= directory.
 
 ** Running the Proxy
 
-You can run the proxy with default settings (port 8080):
+The forward proxy listens for requests and forwards them to their destination.
 
 #+begin_src shell
 ./bin/proxy
@@ -23,8 +31,21 @@ You can run the proxy with default settings (port 8080):
 To specify a different port or run in quiet mode (no informational logging), use the command-line flags:
 
 #+begin_src shell
-./bin/proxy -port=9999 --quiet
+./bin/proxy --port=9999 --quiet
 #+end_src
+
+** Running the Reverse Proxy (API Gateway)
+
+The reverse proxy is a path-based router and load balancer. It requires configuration to know where to send traffic. Configuration is loaded with the following priority:
+
+1. =-config= flag specifying a path to a YAML file.
+2. A =config.yaml= file in the same directory as the executable that started the current process.
+
+#+begin_src shell
+./bin/reverse_proxy --config "reverse_proxy_conf.yaml"
+#+end_src
+
+Example config file is in the root directory of repo (reverse_proxy_conf.yaml)
 
 ** Performance Testing
 
@@ -38,7 +59,7 @@ make test
 
 This command will:
 1. Build the necessary binaries.
-2. Start the proxy and a local test server.
+2. Start the proxy, reverse proxy and a local test servers.
 3. Run benchmarks using the =hey= load testing tool.
 4. Save the results inside the =perf_test/= directory.
 
@@ -48,20 +69,4 @@ To remove all build artifacts and test results, run:
 
 #+begin_src shell
 make clean
-#+end_src
-
-** Project Structure
-
-#+begin_src text
-/proxyonthego
-├── bin/                  # Compiled application binaries
-├── cmd/                  # Source code for executables
-│   ├── proxy/
-│   │   └── main.go       # The main proxy application
-│   └── test_server/
-│       └── main.go       # A simple HTTP server for testing
-├── go.mod                # Go module definition
-├── Makefile              # Build and test automation
-├── perf_test.sh          # The performance test script
-└── perf_test/            # Output directory for test results
 #+end_src

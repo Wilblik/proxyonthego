@@ -1,25 +1,23 @@
 BIN_DIR := bin
 TEST_DIR := perf_test
 
-PROXY_PKG := ./cmd/proxy
-TEST_SERVER_PKG := ./cmd/test_server
+CMD_DIRS := $(wildcard cmd/*)
+CMDS := $(notdir $(CMD_DIRS))
 
-PROXY_EXE := $(BIN_DIR)/proxy
-TEST_SERVER_EXE := $(BIN_DIR)/test_server
+TARGETS := $(addprefix $(BIN_DIR)/, $(CMDS))
 
 .DEFAULT_GOAL := all
 
 all: build
 
-build: proxy test-server
+build: $(TARGETS)
 
-proxy:
-	@echo "Building proxy..."
-	@go build -o $(PROXY_EXE) $(PROXY_PKG)
+$(BIN_DIR)/%: cmd/%
+	@echo "Building $*..."
+	@mkdir -p $(BIN_DIR)
+	@go build -o $@ ./cmd/$*
 
-test-server:
-	@echo "Building test server..."
-	@go build -o $(TEST_SERVER_EXE) $(TEST_SERVER_PKG)
+$(CMDS): %: $(BIN_DIR)/%
 
 test: build
 	@echo "Running performance test suite..."
@@ -29,4 +27,4 @@ clean:
 	@echo "Cleaning up project..."
 	@rm -rf $(BIN_DIR) $(TEST_DIR)
 
-.PHONY: all build build-proxy build-test-server test clean
+.PHONY: all build test clean
