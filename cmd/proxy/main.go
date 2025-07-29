@@ -4,15 +4,13 @@ import (
 	"fmt"
 	"flag"
 	"io"
-	"log"
 	"maps"
 	"net/http"
-	"os"
+
+	"github.com/wilblik/proxyonthego/internal/log"
 )
 
 var (
-	infoLog = log.New(os.Stdout, "[INFO] ", log.Ldate|log.Ltime)
-	errLog = log.New(os.Stderr, "[ERROR] ", log.Ldate|log.Ltime|log.Lshortfile)
 	httpClient = &http.Client{
 		Transport: &http.Transport{
 			MaxIdleConns: 200,
@@ -23,11 +21,11 @@ var (
 
 func handleRequest(rw http.ResponseWriter, r *http.Request) {
 	requestUrl := r.URL.String()
-	infoLog.Printf("%s %s from %s", r.Method, requestUrl, r.RemoteAddr)
+	log.LogInfo("%s %s from %s", r.Method, requestUrl, r.RemoteAddr)
 
 	req, err := http.NewRequest(r.Method, requestUrl, r.Body)
 	if err != nil {
-		errLog.Printf("Failed to create outgoing request: %v", err)
+		log.LogErr("Failed to create outgoing request: %v", err)
 		http.Error(rw, "Error creating request: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -35,7 +33,7 @@ func handleRequest(rw http.ResponseWriter, r *http.Request) {
 
 	res, err := httpClient.Do(req)
 	if err != nil {
-		errLog.Printf("Failed to send outgoing request: %v", err)
+		log.LogErr("Failed to send outgoing request: %v", err)
 		http.Error(rw, "Error sending request: "+err.Error(), http.StatusServiceUnavailable)
 		return
 	}
@@ -52,14 +50,16 @@ func main() {
 	flag.Parse()
 
 	if *quiet {
-		infoLog.SetOutput(io.Discard)
+		log.DisableInfo()
 	}
-	infoLog.Println("Starting server on port", *port)
 
+	log.LogInfo("Starting server on port %s", *port)
 	addr := fmt.Sprintf(":%s", *port)
+
 	http.HandleFunc("/", handleRequest)
+
 	err := http.ListenAndServe(addr, nil)
 	if err != nil {
-		errLog.Fatalf("Could not start http server: %v", err)
+		log.LogFatalf("Could not start http server: %v", err)
 	}
 }
