@@ -34,6 +34,8 @@ To specify a different port or run in quiet mode (no informational logging) or r
 ./bin/proxy --port=9999 --quiet --certFile="server.crt" --keyFile="server.key"
 #+end_src
 
+For self signed TLS certificate generation refer to [[Generating self signed TLS certificate]]
+
 ** Running the Reverse Proxy (API Gateway)
 
 The reverse proxy is a path-based router and load balancer. It requires configuration to know where to send traffic. Configuration is loaded with the following priority:
