@@ -2,4 +2,7 @@
 /bin
 /perf_test
 
+*.crt
+*.key
+
 .DS_Store

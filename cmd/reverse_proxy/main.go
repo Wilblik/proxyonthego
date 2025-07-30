@@ -16,7 +16,13 @@ import (
 
 type Config struct {
 	Port     string          `yaml:"port"`
+	TLS      *TLSConfig      `yaml:"tls"`
 	Services []ServiceConfig `yaml:"services"`
+}
+
+type TLSConfig struct {
+	CertFile string `yaml:"cert_file"`
+	KeyFile  string `yaml:"key_file"`
 }
 
 type ServiceConfig struct {
@@ -131,13 +137,14 @@ func main() {
 
 	config := parseConfig(configPath)
 	serviceData := getServiceData(&config)
-
-	log.LogInfo("Starting reverse proxy on port %s", config.Port)
-
-	port := fmt.Sprintf(":%s", config.Port)
 	handler := createHandler(serviceData)
-	err := http.ListenAndServe(port, handler)
-	if err != nil {
-		log.LogFatalf("Could not start reverse proxy server: %v", err)
+	port := fmt.Sprintf(":%s", config.Port)
+
+	if config.TLS != nil && config.TLS.CertFile != "" && config.TLS.KeyFile != "" {
+		log.LogInfo("Starting https reverse proxy on port %s", config.Port)
+		log.LogFatal(http.ListenAndServeTLS(port, config.TLS.CertFile, config.TLS.KeyFile, handler))
+	} else {
+		log.LogInfo("Starting http reverse proxy on port %s", config.Port)
+		log.LogFatal(http.ListenAndServe(port, handler))
 	}
 }

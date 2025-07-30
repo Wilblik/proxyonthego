@@ -28,10 +28,10 @@ The forward proxy listens for requests and forwards them to their destination.
 ./bin/proxy
 #+end_src
 
-To specify a different port or run in quiet mode (no informational logging), use the command-line flags:
+To specify a different port or run in quiet mode (no informational logging) or run https, use the command-line flags:
 
 #+begin_src shell
-./bin/proxy --port=9999 --quiet
+./bin/proxy --port=9999 --quiet --certFile="server.crt" --keyFile="server.key"
 #+end_src
 
 ** Running the Reverse Proxy (API Gateway)
@@ -62,6 +62,15 @@ This command will:
 2. Start the proxy, reverse proxy and a local test servers.
 3. Run benchmarks using the =hey= load testing tool.
 4. Save the results inside the =perf_test/= directory.
+
+** Generating self signed TLS certificate
+
+This command creates a private key (server.key) and a certificate (server.crt) that are valid for 365 days. It will work for "localhost".
+#+begin_src shell
+openssl req -x509 -newkey rsa:2048 -nodes \
+  -keyout server.key -out server.crt -days 365 \
+  -subj "/C=US/ST=State/L=City/O=Organization/CN=localhost"
+#+end_src
 
 ** Cleaning Up
 

@@ -46,6 +46,8 @@ func handleRequest(rw http.ResponseWriter, r *http.Request) {
 
 func main() {
 	port := flag.String("port", "8080", "Port for the proxy server to listen on")
+	certFile := flag.String("certFile", "", "Path to TLS certificate")
+	keyFile := flag.String("keyFile", "", "Path to TLS private key")
 	quiet := flag.Bool("quiet", false, "Disable info logs")
 	flag.Parse()
 
@@ -53,13 +55,14 @@ func main() {
 		log.DisableInfo()
 	}
 
-	log.LogInfo("Starting server on port %s", *port)
+	http.HandleFunc("/", handleRequest)
 	addr := fmt.Sprintf(":%s", *port)
 
-	http.HandleFunc("/", handleRequest)
-
-	err := http.ListenAndServe(addr, nil)
-	if err != nil {
-		log.LogFatalf("Could not start http server: %v", err)
+	if *certFile != "" && *keyFile != "" {
+		log.LogInfo("Starting https proxy server on port %s", *port)
+		log.LogFatal(http.ListenAndServeTLS(addr, *certFile, *keyFile, nil))
+	} else {
+		log.LogInfo("Starting http proxy server on port %s", *port)
+		log.LogFatal(http.ListenAndServe(addr, nil))
 	}
 }

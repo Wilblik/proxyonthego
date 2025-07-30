@@ -2,6 +2,10 @@
 
 port: 8081
 
+tls:
+    cert_file: "" # Path to TLS certificate
+    key_file: "" # Path to TLS private key
+
 # A list of services to proxy to.
 services:
   # The path prefix that will be routed to this service.

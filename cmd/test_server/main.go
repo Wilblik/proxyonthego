@@ -13,6 +13,8 @@ import (
 
 func main() {
 	port := flag.String("port", "8080", "Port for the http server to listen on")
+	certFile := flag.String("certFile", "", "Path to TLS certificate")
+	keyFile := flag.String("keyFile", "", "Path to TLS private key")
 	quiet := flag.Bool("quiet", false, "Disable info logs")
 	flag.Parse()
 
@@ -29,8 +31,13 @@ func main() {
 		}
 		fmt.Fprintln(w, "OK")
 	})
-
 	addr := fmt.Sprintf(":%s", *port)
-	log.LogInfo("Starting test server on %s", addr)
-	log.LogFatal(http.ListenAndServe(addr, nil))
+
+	if *certFile != "" && *keyFile != "" {
+		log.LogInfo("Starting https test server on port %s", *port)
+		log.LogFatal(http.ListenAndServeTLS(addr, *certFile, *keyFile, nil))
+	} else {
+		log.LogInfo("Starting http test server on %s", addr)
+		log.LogFatal(http.ListenAndServe(addr, nil))
+	}
 }
