@@ -110,7 +110,12 @@ func createHandler(services []*ServiceData) http.Handler {
 	for _, service := range services {
 		proxy := createReverseProxy(service)
 		handler := http.Handler(proxy)
-		handler = http.StripPrefix(service.Path, handler)
+		// Don't strp prefix in case of "/" path because we end up with empty path and return 404
+		if service.Path != "/" {
+			handler = http.StripPrefix(service.Path, handler)
+			// Handles trailing "/" to prevent ServeMux from returning "Moved Permanently"
+			mux.Handle(service.Path+"/", handler)
+		}
 		mux.Handle(service.Path, handler)
 	}
 	return mux
