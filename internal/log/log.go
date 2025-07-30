@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	infoLog = log.New(os.Stdout, "[INFO]", log.Ldate|log.Ltime)
+	infoLog = log.New(os.Stdout, "[INFO] ", log.Ldate|log.Ltime)
 	errLog  = log.New(os.Stderr, "[ERROR] ", log.Ldate|log.Ltime)
 )
 
