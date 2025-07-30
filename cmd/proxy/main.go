@@ -1,13 +1,21 @@
 package main
 
 import (
-	"fmt"
 	"flag"
+	"fmt"
 	"io"
 	"maps"
 	"net/http"
+	"sync"
+	"time"
 
+	"github.com/wilblik/proxyonthego/internal/breaker"
 	"github.com/wilblik/proxyonthego/internal/log"
+)
+
+const (
+	BreakerFailuresThreshold = 5
+	BreakerResetTimeout = 30 * time.Second
 )
 
 var (
@@ -17,11 +25,32 @@ var (
 			MaxIdleConnsPerHost: 200,
 		},
 	}
+	breakers = make(map[string]*breaker.CircuitBreaker)
+	breakersMutex = &sync.Mutex{}
 )
+
+func getBreaker(host string) *breaker.CircuitBreaker {
+	breakersMutex.Lock()
+	defer breakersMutex.Unlock()
+	if cb, exists := breakers[host]; exists {
+		return cb
+	}
+	newCb := breaker.New(BreakerFailuresThreshold, BreakerResetTimeout)
+	breakers[host] = newCb
+	log.LogInfo("Created new circuit breaker for host: %s", host)
+	return newCb
+}
 
 func handleRequest(rw http.ResponseWriter, r *http.Request) {
 	requestUrl := r.URL.String()
 	log.LogInfo("%s %s from %s", r.Method, requestUrl, r.RemoteAddr)
+
+	breaker := getBreaker(r.URL.Host)
+	if !breaker.Ready() {
+		log.LogErr("Circuit breaker for %s is open", requestUrl)
+		http.Error(rw, "Service is not available", http.StatusServiceUnavailable)
+		return
+	}
 
 	req, err := http.NewRequest(r.Method, requestUrl, r.Body)
 	if err != nil {
@@ -35,9 +64,16 @@ func handleRequest(rw http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.LogErr("Failed to send outgoing request: %v", err)
 		http.Error(rw, "Error sending request: "+err.Error(), http.StatusServiceUnavailable)
+		breaker.RecordFailure()
 		return
 	}
 	defer res.Body.Close()
+
+	if res.StatusCode >= 500 {
+		breaker.RecordFailure()
+	} else {
+		breaker.RecordSuccess()
+	}
 
 	maps.Copy(rw.Header(), res.Header)
 	rw.WriteHeader(res.StatusCode)
