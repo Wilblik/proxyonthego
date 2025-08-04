@@ -13,6 +13,7 @@ import (
 	"github.com/wilblik/proxyonthego/internal/log"
 )
 
+// TODO Provide a way to configure
 const (
 	BreakerFailuresThreshold = 5
 	BreakerResetTimeout = 30 * time.Second
