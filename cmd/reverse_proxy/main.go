@@ -9,9 +9,17 @@ import (
 	"os"
 	"path/filepath"
 	"sync/atomic"
+	"time"
 
+	"github.com/wilblik/proxyonthego/internal/breaker"
 	"github.com/wilblik/proxyonthego/internal/log"
 	"gopkg.in/yaml.v3"
+)
+
+// TODO Provide a way to configure
+const (
+	BreakerFailuresThreshold = 5
+	BreakerResetTimeout = 30 * time.Second
 )
 
 type Config struct {
@@ -75,60 +83,89 @@ func parseConfig(configPath *string) Config {
 	return config
 }
 
-type ServiceData struct {
+type ServiceManager struct {
 	Path      string
-	Instances []*url.URL
+	Instances []*ServiceInstance
 	nextIndex uint64
 }
 
-func (s *ServiceData) nextInstance() *url.URL {
-	idx := atomic.AddUint64(&s.nextIndex, 1) % uint64(len(s.Instances))
-	return s.Instances[idx]
+type ServiceInstance struct {
+	Url     *url.URL
+	Proxy   *httputil.ReverseProxy
+	Breaker *breaker.CircuitBreaker
 }
 
-func getServiceData(config *Config) []*ServiceData {
-	var services []*ServiceData
-	for _, sc := range config.Services {
-		var instances  []*url.URL
-		for _, instanceURL := range sc.Instances {
-			instances = append(instances, instanceURL.URL)
+func (s *ServiceManager) nextHealthyInstance() *ServiceInstance {
+	for i := 0; i < len(s.Instances); i++ {
+		idx := atomic.AddUint64(&s.nextIndex, 1) % uint64(len(s.Instances))
+		instance := s.Instances[idx]
+		if instance.Breaker.Ready() {
+			return instance
+		}
+	}
+	return nil
+}
+
+func getServiceManagers(config *Config) []*ServiceManager {
+	var serviceMgrs []*ServiceManager
+	for _, serviceConf := range config.Services {
+		var instances  []*ServiceInstance
+		for _, instanceURL := range serviceConf.Instances {
+			breaker := breaker.New(BreakerFailuresThreshold, BreakerResetTimeout)
+			proxy := createReverseProxy(instanceURL.URL, breaker)
+			serviceInstance := &ServiceInstance{Url: instanceURL.URL, Proxy: proxy, Breaker: breaker}
+			instances = append(instances, serviceInstance)
 		}
 		if len(instances) == 0 {
-			log.LogFatalf("No instance URL configured for service path: %s", sc.Path)
+			log.LogFatalf("No instance URL configured for service path: %s", serviceConf.Path)
 		}
-		services = append(services, &ServiceData {
-			Path: sc.Path,
-			Instances : instances,
-		})
-		log.LogInfo("Configured service for path '%s' with %d instances", sc.Path, len(instances))
+		serviceMgrs = append(serviceMgrs, &ServiceManager{Path: serviceConf.Path,Instances: instances})
+		log.LogInfo("Configured service for path '%s' with %d instances", serviceConf.Path, len(instances))
 	}
-	return services
+	return serviceMgrs
 }
 
-func createHandler(services []*ServiceData) http.Handler {
-	mux := http.NewServeMux()
-	for _, service := range services {
-		proxy := createReverseProxy(service)
-		handler := http.Handler(proxy)
-		// Don't strp prefix in case of "/" path because we end up with empty path and return 404
-		if service.Path != "/" {
-			handler = http.StripPrefix(service.Path, handler)
-			// Handles trailing "/" to prevent ServeMux from returning "Moved Permanently"
-			mux.Handle(service.Path+"/", handler)
+func createReverseProxy(target *url.URL, breaker *breaker.CircuitBreaker) *httputil.ReverseProxy  {
+	proxy := httputil.NewSingleHostReverseProxy(target)
+	proxy.ModifyResponse = func(res *http.Response) error {
+		if res.StatusCode >= 500 {
+			breaker.RecordFailure()
+		} else {
+			breaker.RecordSuccess()
 		}
-		mux.Handle(service.Path, handler)
+		return nil
 	}
-	return mux
-}
-
-func createReverseProxy(service *ServiceData) *httputil.ReverseProxy  {
-	proxy := &httputil.ReverseProxy{}
-	proxy.Director = func(req *http.Request) {
-		target := service.nextInstance()
-		req.URL.Scheme = target.Scheme
-		req.URL.Host = target.Host
+	proxy.ErrorHandler = func(w http.ResponseWriter, req *http.Request, err error) {
+		breaker.RecordFailure()
+		log.LogErr("Error calling '%s': %v", req.URL, err)
+		http.Error(w, "Service is not available", http.StatusServiceUnavailable)
 	}
 	return proxy
+}
+
+func createHandler(serviceMgrs []*ServiceManager) http.Handler {
+	mux := http.NewServeMux()
+	for _, serviceMgr := range serviceMgrs {
+		handlerFunc := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			instance := serviceMgr.nextHealthyInstance()
+			if instance == nil {
+				log.LogErr("All backends for service: %s are down", serviceMgr.Path)
+				http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
+				return
+			}
+			log.LogInfo("Forwarding request for service '%s' to %s", serviceMgr.Path, instance.Url)
+			instance.Proxy.ServeHTTP(w, r)
+		})
+		handler := http.Handler(handlerFunc)
+		// Don't strp prefix in case of "/" path because then we end up with empty path and return 404
+		if serviceMgr.Path != "/" {
+			handler = http.StripPrefix(serviceMgr.Path, handler)
+			// Handles trailing "/" to prevent ServeMux from returning "Moved Permanently"
+			mux.Handle(serviceMgr.Path+"/", handler)
+		}
+		mux.Handle(serviceMgr.Path, handler)
+	}
+	return mux
 }
 
 func main() {
@@ -141,8 +178,8 @@ func main() {
 	}
 
 	config := parseConfig(configPath)
-	serviceData := getServiceData(&config)
-	handler := createHandler(serviceData)
+	serviceMgrs := getServiceManagers(&config)
+	handler := createHandler(serviceMgrs)
 	port := fmt.Sprintf(":%s", config.Port)
 
 	if config.TLS != nil && config.TLS.CertFile != "" && config.TLS.KeyFile != "" {
